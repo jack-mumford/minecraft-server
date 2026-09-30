@@ -42,6 +42,18 @@ variable "github_repository" {
   default     = "jack-mumford/minecraft-server"
 }
 
+variable "github_repository_immutable" {
+  description = <<-EOT
+    Repository in GitHub's immutable OIDC subject form (owner@owner_id/name@repo_id), used when the
+    repo has use_immutable_subject enabled. Find it with:
+    gh api repos/OWNER/REPO/actions/oidc/customization/sub --jq .sub_claim_prefix
+    Set to null to trust only the name-based subject.
+  EOT
+  type        = string
+  default     = "jack-mumford@58003173/minecraft-server@1398763133"
+  nullable    = true
+}
+
 variable "github_branch" {
   description = "Branch whose workflows may assume the deploy role."
   type        = string
@@ -61,6 +73,12 @@ locals {
   oidc_url    = "token.actions.githubusercontent.com"
   oidc_arn    = var.create_github_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.github[0].arn
   ami_ssm_arn = "arn:aws:ssm:${var.region}::parameter/aws/service/ami-amazon-linux-latest/*"
+
+  # Accept both GitHub subject formats: name-based and immutable (IDs stay fixed across renames).
+  github_subjects = compact([
+    "repo:${var.github_repository}:ref:refs/heads/${var.github_branch}",
+    var.github_repository_immutable == null ? "" : "repo:${var.github_repository_immutable}:ref:refs/heads/${var.github_branch}",
+  ])
 }
 
 # --- Buckets ---
@@ -141,7 +159,7 @@ resource "aws_iam_role" "github_actions" {
       Condition = {
         StringEquals = {
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
-          "${local.oidc_url}:sub" = "repo:${var.github_repository}:ref:refs/heads/${var.github_branch}"
+          "${local.oidc_url}:sub" = local.github_subjects
         }
       }
     }]
