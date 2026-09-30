@@ -1,6 +1,6 @@
 # minecraft-server
 
-A vanilla Minecraft Java Edition server on AWS EC2 (`t4g.medium`, Graviton/arm64). Terraform manages everything, and GitHub Actions deploys, backs up, and destroys it.
+A Minecraft Java Edition server (vanilla or [Fabric](https://fabricmc.net)) on AWS EC2 (`t4g.medium`, Graviton/arm64). Terraform manages everything, and GitHub Actions deploys, backs up, and destroys it.
 
 ## Layout
 
@@ -43,6 +43,15 @@ Run them from the **Actions** tab. They share a concurrency group, so they never
 - **Destroy**: requires typing `destroy`. It takes a final backup (the destroy is aborted if the backup fails) and then runs `terraform destroy`. The backup bucket lives in the bootstrap stack and is not deleted.
 
 Changing `minecraft_version` or `server_properties` rebuilds the EC2 instance. The world volume is detached and reattached, so no data is lost.
+
+## Mods (Fabric)
+
+The server runs Fabric (`server_type = "fabric"` in `minecraft.auto.tfvars`). To add a mod:
+
+1. On [Modrinth](https://modrinth.com), open the mod's **Versions** tab, pick the build for your `minecraft_version` with the **Fabric** loader, and copy the `.jar` download link. Most mods also need [Fabric API](https://modrinth.com/mod/fabric-api).
+2. Add the URL to `mods` in `minecraft.auto.tfvars`, commit, and run **Deploy**.
+
+Every rebuild replaces the `mods/` folder with exactly this list. Players must install Fabric and any mods that aren't server-only. Before changing `minecraft_version`, check that Fabric and every mod support the new version.
 
 ## Operating the server
 

@@ -33,6 +33,39 @@ variable "minecraft_version" {
   default     = "latest"
 }
 
+variable "server_type" {
+  description = "Server software: \"vanilla\" (Mojang's server) or \"fabric\" (Fabric mod loader)."
+  type        = string
+  default     = "vanilla"
+
+  validation {
+    condition     = contains(["vanilla", "fabric"], var.server_type)
+    error_message = "server_type must be \"vanilla\" or \"fabric\"."
+  }
+}
+
+variable "fabric_loader_version" {
+  description = "Fabric loader version (e.g. \"0.19.5\"), or \"latest\" for the newest stable loader. Only used when server_type = \"fabric\"."
+  type        = string
+  default     = "latest"
+}
+
+variable "mods" {
+  description = "Direct download URLs of mod .jar files (e.g. from Modrinth). The mods folder is replaced with exactly these on every server rebuild. Requires server_type = \"fabric\"."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = length(var.mods) == 0 || var.server_type == "fabric"
+    error_message = "mods can only be used with server_type = \"fabric\"."
+  }
+
+  validation {
+    condition     = alltrue([for url in var.mods : can(regex("^https://[^'\\s]+\\.jar$", url))])
+    error_message = "Each mod must be an https:// URL ending in .jar."
+  }
+}
+
 variable "jvm_memory" {
   description = "JVM heap size (-Xms/-Xmx). Leave ~1 GB headroom for the OS; t4g.medium has 4 GB."
   type        = string

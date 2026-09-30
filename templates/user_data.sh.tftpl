@@ -66,7 +66,8 @@ if systemctl is-active --quiet minecraft; then
 fi
 trap 'if [ "$WAS_ACTIVE" = true ]; then systemctl start minecraft; fi' EXIT
 
-tar -C /opt/minecraft --exclude=./server.jar --exclude=./.version --exclude=./lost+found -czf - . \
+tar -C /opt/minecraft --exclude=./server.jar --exclude=./fabric-server-launch.jar --exclude=./.version \
+  --exclude=./libraries --exclude=./versions --exclude=./.fabric --exclude=./lost+found -czf - . \
   | aws s3 cp - "s3://BUCKET_PLACEHOLDER/$KEY"
 echo "Backup uploaded to s3://BUCKET_PLACEHOLDER/$KEY"
 SCRIPT
@@ -93,6 +94,29 @@ JAVA_BIN=$(rpm -ql "java-$JAVA_MAJOR-amazon-corretto-headless" | grep '/bin/java
 curl -fsSL -o "$MC_HOME/server.jar" "$SERVER_URL"
 echo "$SERVER_SHA1  $MC_HOME/server.jar" | sha1sum -c -
 echo "$VERSION" > "$MC_HOME/.version"
+SERVER_JAR=server.jar
+
+# --- Fabric: launcher wraps the vanilla server.jar above ---
+if [ "${server_type}" = "fabric" ]; then
+  FABRIC_META=https://meta.fabricmc.net/v2/versions
+  LOADER="${fabric_loader}"
+  if [ "$LOADER" = "latest" ]; then
+    LOADER=$(curl -fsSL "$FABRIC_META/loader/$VERSION" | jq -r '[.[] | select(.loader.stable)][0].loader.version // empty')
+  fi
+  [ -n "$LOADER" ] || { echo "No stable Fabric loader for Minecraft $VERSION"; exit 1; }
+  INSTALLER=$(curl -fsSL "$FABRIC_META/installer" | jq -r '[.[] | select(.stable)][0].version')
+
+  curl -fsSL -o "$MC_HOME/fabric-server-launch.jar" "$FABRIC_META/loader/$VERSION/$LOADER/$INSTALLER/server/jar"
+  echo "fabric-loader=$LOADER" >> "$MC_HOME/.version"
+  SERVER_JAR=fabric-server-launch.jar
+fi
+
+# --- Mods: the folder always matches the Terraform list exactly ---
+rm -rf "$MC_HOME/mods"
+mkdir -p "$MC_HOME/mods"
+%{ for url in mods ~}
+curl -fsSL --output-dir "$MC_HOME/mods" -O '${url}'
+%{ endfor ~}
 
 # --- Server config (managed by Terraform; rewritten on each instance build) ---
 echo "eula=true" > "$MC_HOME/eula.txt"
@@ -117,7 +141,7 @@ RequiresMountsFor=$MC_HOME
 User=minecraft
 Group=minecraft
 WorkingDirectory=$MC_HOME
-ExecStart=$JAVA_BIN -Xms${jvm_memory} -Xmx${jvm_memory} -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -jar server.jar nogui
+ExecStart=$JAVA_BIN -Xms${jvm_memory} -Xmx${jvm_memory} -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -jar $SERVER_JAR nogui
 # The server saves the world on SIGTERM; give it time to finish.
 TimeoutStopSec=120
 SuccessExitStatus=0 143

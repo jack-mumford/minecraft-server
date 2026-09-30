@@ -93,6 +93,9 @@ resource "aws_instance" "minecraft" {
   user_data = templatefile("${path.module}/templates/user_data.sh.tftpl", {
     volume_serial     = replace(aws_ebs_volume.data.id, "-", "")
     minecraft_version = var.minecraft_version
+    server_type       = var.server_type
+    fabric_loader     = var.fabric_loader_version
+    mods              = var.mods
     jvm_memory        = var.jvm_memory
     server_properties = local.server_properties
     backup_bucket     = var.backup_bucket
