@@ -1,0 +1,7 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!minecraft.auto.tfvars
+crash.log
+.terraform.tfstate.lock.info

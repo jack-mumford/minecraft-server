@@ -1,0 +1,132 @@
+#!/bin/bash
+# Bootstraps a vanilla Minecraft Java Edition server on Amazon Linux 2023 (arm64).
+# Rendered by Terraform; runs once on first boot of each instance.
+set -euxo pipefail
+exec > >(tee -a /var/log/minecraft-setup.log) 2>&1
+
+MC_HOME=/opt/minecraft
+BACKUP_BUCKET="${backup_bucket}"
+MANIFEST_URL=https://piston-meta.mojang.com/mc/game/version_manifest_v2.json
+
+dnf install -y jq xfsprogs
+
+# --- Mount the persistent world volume (attached after boot, so wait for it) ---
+DEVICE=/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${volume_serial}
+for _ in $(seq 1 60); do
+  [ -e "$DEVICE" ] && break
+  sleep 5
+done
+[ -e "$DEVICE" ] || { echo "Data volume never appeared at $DEVICE"; exit 1; }
+
+NEW_VOLUME=false
+if ! blkid "$DEVICE"; then
+  mkfs.xfs "$DEVICE"
+  NEW_VOLUME=true
+fi
+
+mkdir -p "$MC_HOME"
+UUID=$(blkid -s UUID -o value "$DEVICE")
+grep -q "$UUID" /etc/fstab || echo "UUID=$UUID $MC_HOME xfs defaults,nofail 0 2" >> /etc/fstab
+systemctl daemon-reload
+mount -a
+
+id minecraft || useradd --system --home-dir "$MC_HOME" --shell /sbin/nologin minecraft
+
+# --- Restore the latest backup onto a brand-new volume (e.g. after destroy + deploy) ---
+if [ "$NEW_VOLUME" = true ]; then
+  LATEST=""
+  # Retry while the instance role's IAM permissions propagate.
+  for _ in $(seq 1 12); do
+    if LISTING=$(aws s3 ls "s3://$BACKUP_BUCKET/backups/" 2>&1) || [ -z "$LISTING" ]; then
+      LATEST=$(echo "$LISTING" | awk '{print $4}' | grep '\.tar\.gz$' | sort | tail -1 || true)
+      break
+    fi
+    echo "Waiting for S3 access: $LISTING"
+    sleep 10
+  done
+  if [ -n "$LATEST" ]; then
+    echo "Restoring s3://$BACKUP_BUCKET/backups/$LATEST"
+    aws s3 cp "s3://$BACKUP_BUCKET/backups/$LATEST" - | tar -xz -C "$MC_HOME"
+  else
+    echo "No backup found; starting a new world"
+  fi
+fi
+
+# --- Backup script, run by the Backup/Destroy workflows through SSM ---
+cat > /usr/local/bin/minecraft-backup <<'SCRIPT'
+#!/bin/bash
+# Stops the server so the world is consistent on disk, uploads a tarball to S3, restarts.
+set -euo pipefail
+KEY="backups/minecraft-$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
+
+WAS_ACTIVE=false
+if systemctl is-active --quiet minecraft; then
+  WAS_ACTIVE=true
+  systemctl stop minecraft
+fi
+trap 'if [ "$WAS_ACTIVE" = true ]; then systemctl start minecraft; fi' EXIT
+
+tar -C /opt/minecraft --exclude=./server.jar --exclude=./.version --exclude=./lost+found -czf - . \
+  | aws s3 cp - "s3://BUCKET_PLACEHOLDER/$KEY"
+echo "Backup uploaded to s3://BUCKET_PLACEHOLDER/$KEY"
+SCRIPT
+sed -i "s|BUCKET_PLACEHOLDER|$BACKUP_BUCKET|g" /usr/local/bin/minecraft-backup
+chmod 755 /usr/local/bin/minecraft-backup
+
+# --- Resolve the server version and the Java version it needs ---
+VERSION="${minecraft_version}"
+MANIFEST=$(curl -fsSL "$MANIFEST_URL")
+if [ "$VERSION" = "latest" ]; then
+  VERSION=$(echo "$MANIFEST" | jq -r '.latest.release')
+fi
+VERSION_URL=$(echo "$MANIFEST" | jq -r --arg v "$VERSION" '.versions[] | select(.id == $v) | .url')
+[ -n "$VERSION_URL" ] || { echo "Unknown Minecraft version: $VERSION"; exit 1; }
+
+META=$(curl -fsSL "$VERSION_URL")
+SERVER_URL=$(echo "$META" | jq -r '.downloads.server.url')
+SERVER_SHA1=$(echo "$META" | jq -r '.downloads.server.sha1')
+JAVA_MAJOR=$(echo "$META" | jq -r '.javaVersion.majorVersion // 21')
+
+dnf install -y "java-$JAVA_MAJOR-amazon-corretto-headless"
+JAVA_BIN=$(rpm -ql "java-$JAVA_MAJOR-amazon-corretto-headless" | grep '/bin/java$' | head -1)
+
+curl -fsSL -o "$MC_HOME/server.jar" "$SERVER_URL"
+echo "$SERVER_SHA1  $MC_HOME/server.jar" | sha1sum -c -
+echo "$VERSION" > "$MC_HOME/.version"
+
+# --- Server config (managed by Terraform; rewritten on each instance build) ---
+echo "eula=true" > "$MC_HOME/eula.txt"
+
+touch "$MC_HOME/server.properties"
+%{ for key, value in server_properties ~}
+sed -i '/^${key}=/d' "$MC_HOME/server.properties"
+echo '${key}=${value}' >> "$MC_HOME/server.properties"
+%{ endfor ~}
+
+chown -R minecraft:minecraft "$MC_HOME"
+
+# --- systemd service ---
+cat > /etc/systemd/system/minecraft.service <<UNIT
+[Unit]
+Description=Minecraft Server
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor=$MC_HOME
+
+[Service]
+User=minecraft
+Group=minecraft
+WorkingDirectory=$MC_HOME
+ExecStart=$JAVA_BIN -Xms${jvm_memory} -Xmx${jvm_memory} -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -jar server.jar nogui
+# The server saves the world on SIGTERM; give it time to finish.
+TimeoutStopSec=120
+SuccessExitStatus=0 143
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now minecraft.service
