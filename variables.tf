@@ -66,6 +66,18 @@ variable "mods" {
   }
 }
 
+variable "whitelist" {
+  description = "Minecraft usernames allowed to join. When non-empty, the whitelist is enforced. Ops are always included."
+  type        = list(string)
+  default     = []
+}
+
+variable "ops" {
+  description = "Minecraft usernames with operator (admin) permissions, level 4."
+  type        = list(string)
+  default     = []
+}
+
 variable "jvm_memory" {
   description = "JVM heap size (-Xms/-Xmx). Leave ~1 GB headroom for the OS; t4g.medium has 4 GB."
   type        = string

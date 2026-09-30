@@ -13,7 +13,12 @@ locals {
     "server-port" = "25565"
   }
 
-  server_properties = merge(local.default_server_properties, var.server_properties)
+  whitelist_properties = length(local.player_names) > 0 ? {
+    "white-list"        = "true"
+    "enforce-whitelist" = "true"
+  } : {}
+
+  server_properties = merge(local.default_server_properties, local.whitelist_properties, var.server_properties)
 }
 
 # --- IAM: lets the instance register with SSM Session Manager (no SSH needed) ---
@@ -96,6 +101,8 @@ resource "aws_instance" "minecraft" {
     server_type       = var.server_type
     fabric_loader     = var.fabric_loader_version
     mods              = var.mods
+    whitelist_json    = local.whitelist_json
+    ops_json          = local.ops_json
     jvm_memory        = var.jvm_memory
     server_properties = local.server_properties
     backup_bucket     = var.backup_bucket

@@ -121,6 +121,14 @@ curl -fsSL --output-dir "$MC_HOME/mods" -O '${url}'
 # --- Server config (managed by Terraform; rewritten on each instance build) ---
 echo "eula=true" > "$MC_HOME/eula.txt"
 
+# Players are managed in Terraform; in-game /whitelist and /op changes are overwritten on rebuild.
+cat > "$MC_HOME/whitelist.json" <<'JSON'
+${whitelist_json}
+JSON
+cat > "$MC_HOME/ops.json" <<'JSON'
+${ops_json}
+JSON
+
 touch "$MC_HOME/server.properties"
 %{ for key, value in server_properties ~}
 sed -i '/^${key}=/d' "$MC_HOME/server.properties"

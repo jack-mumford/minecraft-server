@@ -44,6 +44,17 @@ Run them from the **Actions** tab. They share a concurrency group, so they never
 
 Changing `minecraft_version` or `server_properties` rebuilds the EC2 instance. The world volume is detached and reattached, so no data is lost.
 
+## Players (whitelist and ops)
+
+List Minecraft usernames in `minecraft.auto.tfvars`, commit, and run **Deploy**:
+
+```hcl
+whitelist = ["FriendOne", "FriendTwo"]
+ops       = ["YourName"] # admins (level 4); always whitelisted too
+```
+
+A non-empty list turns on `white-list` and `enforce-whitelist`. Terraform looks up each name with Mojang's API when it plans, so a misspelled name fails the run. Each change rebuilds the server, which takes a few minutes and disconnects players. Changes made in-game with `/whitelist` or `/op` last until the next rebuild, so add them to the file too.
+
 ## Mods (Fabric)
 
 The server runs Fabric (`server_type = "fabric"` in `minecraft.auto.tfvars`). To add a mod:

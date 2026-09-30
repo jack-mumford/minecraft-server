@@ -18,6 +18,10 @@ mods = [
   "https://cdn.modrinth.com/data/NcUtCpym/versions/UleMm8za/xaeroworldmap-fabric-26.3-1.46.4.jar",
 ]
 
+# Minecraft usernames. A non-empty list turns the whitelist on; ops are whitelisted automatically.
+whitelist = ["Mumfford"]
+ops       = ["Mumfford"]
+
 jvm_memory    = "3G"
 allowed_cidrs = ["0.0.0.0/0"]
 
