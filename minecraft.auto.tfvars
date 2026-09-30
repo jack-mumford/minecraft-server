@@ -30,4 +30,9 @@ server_properties = {
   difficulty  = "normal"
   gamemode    = "survival"
   max-players = "10"
+
+  # How far players can see, in chunks (default 10). Drop to 16 if exploring lags.
+  view-distance = "20"
+  # How far mobs, crops and redstone keep running (default 10). Kept low: this is the CPU-heavy one.
+  simulation-distance = "10"
 }
