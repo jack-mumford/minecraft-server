@@ -11,7 +11,12 @@ server_type       = "fabric"
 
 # Direct .jar URLs (e.g. Modrinth's download link for the 26.3 Fabric build).
 # Most mods also need Fabric API: https://modrinth.com/mod/fabric-api
-mods = []
+mods = [
+  # Fabric API 0.161.0 (required by Xaero's World Map)
+  "https://cdn.modrinth.com/data/P7dR8mSH/versions/bNnaTiuM/fabric-api-0.161.0%2B26.3.jar",
+  # Xaero's World Map 1.46.4
+  "https://cdn.modrinth.com/data/NcUtCpym/versions/UleMm8za/xaeroworldmap-fabric-26.3-1.46.4.jar",
+]
 
 jvm_memory    = "3G"
 allowed_cidrs = ["0.0.0.0/0"]
