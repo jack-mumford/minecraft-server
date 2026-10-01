@@ -219,6 +219,32 @@ resource "aws_iam_role_policy" "github_actions" {
   })
 }
 
+# --- Static server address ---
+# Kept here, not in the server stack, so Destroy doesn't release it: Xaero's
+# World Map and Minimap store each player's map under the server address.
+
+import {
+  to = aws_eip.minecraft
+  id = "eipalloc-0ebb6edbfd02969f1"
+}
+
+resource "aws_eip" "minecraft" {
+  domain = "vpc"
+
+  tags = { Name = var.name }
+
+  lifecycle {
+    prevent_destroy = true
+    # Attached/detached by the server stack.
+    ignore_changes = [instance, network_interface, associate_with_private_ip]
+  }
+}
+
+output "server_address" {
+  description = "Permanent address players connect to."
+  value       = aws_eip.minecraft.public_ip
+}
+
 # --- Values to store as GitHub repository variables ---
 
 output "github_variables" {

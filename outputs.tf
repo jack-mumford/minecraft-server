@@ -1,6 +1,6 @@
 output "server_address" {
   description = "Address to enter in Minecraft's multiplayer menu."
-  value       = aws_eip.minecraft.public_ip
+  value       = data.aws_eip.minecraft.public_ip
 }
 
 output "instance_id" {

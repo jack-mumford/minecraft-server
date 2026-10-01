@@ -127,11 +127,24 @@ resource "aws_volume_attachment" "data" {
   stop_instance_before_detaching = true
 }
 
-resource "aws_eip" "minecraft" {
-  domain   = "vpc"
-  instance = aws_instance.minecraft.id
-
+# The Elastic IP lives in bootstrap/ so the address survives Destroy; players'
+# Xaero map data is keyed by server address. This stack only attaches it.
+data "aws_eip" "minecraft" {
   tags = { Name = var.name }
+}
+
+resource "aws_eip_association" "minecraft" {
+  allocation_id = data.aws_eip.minecraft.id
+  instance_id   = aws_instance.minecraft.id
 
   depends_on = [aws_internet_gateway.this]
+}
+
+# The EIP used to be managed here; hand it over to bootstrap/ without releasing it.
+removed {
+  from = aws_eip.minecraft
+
+  lifecycle {
+    destroy = false
+  }
 }
