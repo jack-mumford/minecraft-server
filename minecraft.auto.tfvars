@@ -27,7 +27,7 @@ allowed_cidrs = ["0.0.0.0/0"]
 
 server_properties = {
   motd        = "A Minecraft server on AWS"
-  difficulty  = "normal"
+  difficulty  = "hard"
   gamemode    = "survival"
   max-players = "10"
 
