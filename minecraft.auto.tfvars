@@ -19,7 +19,7 @@ mods = [
 ]
 
 # Minecraft usernames. A non-empty list turns the whitelist on; ops are whitelisted automatically.
-whitelist = ["Mumfford", "Weallplaytoo", "Inillex", "Jacksonnfish", "stocktaco"]
+whitelist = ["Mumfford", "Weallplaytoo", "Inillex", "Jacksonnfish", "stocktaco", "joodu"]
 ops       = ["Mumfford"]
 
 jvm_memory    = "3G"
